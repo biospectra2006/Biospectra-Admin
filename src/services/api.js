@@ -7,14 +7,8 @@ const api = axios.create({
     withCredentials: true,
 });
 
-// Add a request interceptor to add the auth token to every request
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('spectra_admin_token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-});
+// We no longer need the request interceptor to add the Bearer token manually
+// because 'withCredentials: true' automatically sends the HttpOnly cookie.
 
 // Add a response interceptor to handle 401s and token refresh
 api.interceptors.response.use(
@@ -29,7 +23,8 @@ api.interceptors.response.use(
             error.response.status === 401 && 
             !originalRequest._retry &&
             !originalRequest.url.includes('/auth/refresh-token') &&
-            !originalRequest.url.includes('/auth/login')
+            !originalRequest.url.includes('/auth/login') &&
+            !originalRequest.url.includes('/auth/verify-mfa-stepup')
         ) {
             originalRequest._retry = true;
 
@@ -37,10 +32,8 @@ api.interceptors.response.use(
                 // Attempt to refresh the token
                 const response = await api.post('/auth/refresh-token');
                 if (response.data.status === 'success') {
-                    // Update the access token in localStorage (for legacy header fallback)
-                    localStorage.setItem('spectra_admin_token', response.data.token);
-                    
-                    // Retry the original request with the new token
+                    // The new token is automatically set as an HttpOnly cookie by the server
+                    // Retry the original request with the new cookie
                     return api(originalRequest);
                 }
             } catch (refreshError) {
@@ -56,8 +49,7 @@ api.interceptors.response.use(
 
 export const login = async (username, password) => {
     const response = await api.post('/auth/login', { username, password });
-    if (response.data.token) {
-        localStorage.setItem('spectra_admin_token', response.data.token);
+    if (response.data.status === 'success') {
         localStorage.setItem('spectra_admin_user', JSON.stringify(response.data.user));
     }
     return response.data;
@@ -69,7 +61,6 @@ export const logout = async () => {
     } catch (err) {
         console.error('Logout error:', err);
     } finally {
-        localStorage.removeItem('spectra_admin_token');
         localStorage.removeItem('spectra_admin_user');
     }
 };

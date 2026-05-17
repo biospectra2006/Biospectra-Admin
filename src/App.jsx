@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import './index.css';
 import { 
-  Plus, Upload, FileText, Database, 
+  Plus, FileText, 
   Layers, CheckCircle, Loader2, Search, 
   Trash2, ExternalLink, Calendar, BookOpen, 
-  ArrowRight, Info, Globe, ShieldCheck,
+  ArrowRight, Globe,
   ChevronRight, FolderOpen, Target, LayoutDashboard,
-  Library, Settings, BarChart3, Clock, AlertCircle,
-  Activity, Layout, Users, RefreshCw, Zap, Book, Folder,
-  Image, Camera, QrCode, ShieldCheck as Shield, Pencil, Save
+  Library, Settings, Clock, AlertCircle,
+  Activity, Layout, Zap, Book, Folder,
+  Camera, QrCode, ShieldCheck as Shield, Pencil, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -46,11 +46,12 @@ import GalleryTab from './components/tabs/GalleryTab';
 import SecurityTab from './components/tabs/SecurityTab';
 import AuditTab from './components/tabs/AuditTab';
 import MfaModal from './components/MfaModal';
+import AdminLayout from './components/layout/AdminLayout';
 
 function App() {
   const [journalTree, setJournalTree] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('spectra_admin_token'));
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('spectra_admin_user'));
   const [submitting, setSubmitting] = useState(false);
   const [health, setHealth] = useState({ db: 'CHECKING', cloudinary: 'OK' });
   const [activeTab, setActiveTab] = useState('analytics');
@@ -109,39 +110,38 @@ function App() {
           console.error('Logout error:', err);
         } finally {
           setIsAuthenticated(false);
-          localStorage.removeItem('spectra_admin_token');
           localStorage.removeItem('spectra_admin_user');
-          window.location.href = '/login'; // Force a clean start
+          window.location.href = '/'; // Reset to root to avoid Vercel 404s
         }
       }
     );
   };
 
   // Helper to handle MFA Step-up Challenges
-  const withMfa = async (action) => {
-    try {
-      const result = await action();
-      setMfaVerifiedAt(Date.now());
-      return result;
-    } catch (err) {
-      if (err.response?.status === 403 && err.response?.data?.status === 'mfa_required') {
-        return new Promise((resolve, reject) => {
-          setMfaModal({ 
-            isOpen: true, 
-            onResolve: async () => {
-              try {
-                const result = await action();
-                setMfaVerifiedAt(Date.now());
-                resolve(result);
-              } catch (retryErr) {
-                reject(retryErr);
-              }
-            } 
-          });
-        });
+  const withMfa = (action) => {
+    return new Promise((resolve, reject) => {
+      if (isElevated) {
+        Promise.resolve(action()).then(resolve).catch(reject);
+        return;
       }
-      throw err;
-    }
+      setMfaModal({
+        isOpen: true,
+        onResolve: async () => {
+          try {
+            setMfaVerifiedAt(Date.now());
+            setMfaModal({ isOpen: false, onResolve: null, onReject: null });
+            const result = await action();
+            resolve(result);
+          } catch (err) {
+            reject(err);
+          }
+        },
+        onReject: () => {
+          setMfaModal({ isOpen: false, onResolve: null, onReject: null });
+          reject(new Error('MFA_CANCELLED'));
+        }
+      });
+    });
   };
 
   // Active Context States (The Flow)
@@ -364,6 +364,7 @@ function App() {
       setArticleData({ title: '', authors: '', abstract: '', keywords: '', doi: '', affiliation: '', file: null });
       await fetchData();
     } catch (error) {
+      if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
       showAlert('Operation Failed', error.response?.data?.message || 'There was an error processing your article.');
     } finally {
       setSubmitting(false);
@@ -376,6 +377,7 @@ function App() {
         await withMfa(() => deleteArticle(id));
         await fetchData();
       } catch (error) {
+        if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
         showAlert('Error', 'Failed to delete article');
       }
     });
@@ -391,6 +393,7 @@ function App() {
           setActiveCategory(null);
           await fetchData();
         } catch (error) {
+          if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
           showAlert('Error', 'Failed to delete section');
         }
       }
@@ -411,6 +414,7 @@ function App() {
           await fetchData();
           showAlert('Success', `Volume ${year} deleted successfully.`);
         } catch (error) {
+          if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
           console.error('Delete Year Error:', error);
           showAlert('Error', 'Failed to delete volume: ' + (error.response?.data?.message || error.message));
         }
@@ -471,6 +475,7 @@ function App() {
       setEditingAbout(null);
       await fetchAboutData();
     } catch (error) {
+      if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
       showAlert('Error', 'Failed to save about section');
     } finally {
       setSubmitting(false);
@@ -502,6 +507,7 @@ function App() {
       setEditingMember(null);
       await fetchEditorialData();
     } catch (error) {
+      if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
       showAlert('Error', 'Failed to save member');
     } finally {
       setSubmitting(false);
@@ -514,6 +520,7 @@ function App() {
         await withMfa(() => deleteEditorialMember(id));
         await fetchEditorialData();
       } catch (error) {
+        if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
         showAlert('Error', 'Delete failed');
       }
     });
@@ -536,6 +543,7 @@ function App() {
       await fetchGalleryData();
       showAlert('Success', 'Image uploaded and compressed!');
     } catch (error) {
+      if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
       showAlert('Upload Failed', error.message);
     } finally {
       setSubmitting(false);
@@ -556,6 +564,7 @@ function App() {
       setGalleryData({ title: '', description: '', category: 'general', order: 0, image: null });
       await fetchGalleryData();
     } catch (error) {
+      if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
       showAlert('Error', 'Failed to update image info');
     } finally {
       setSubmitting(false);
@@ -629,133 +638,15 @@ function App() {
       {!isAuthenticated ? (
         <Login onLoginSuccess={() => setIsAuthenticated(true)} />
       ) : (
-      <div className="admin-container h-screen overflow-hidden">
-        {/* SIDEBAR */}
-        <div className="sidebar bg-white border-r border-slate-200 flex flex-col p-4 overflow-hidden">
-          <div className="flex items-center gap-3 mb-8 px-1">
-            <img 
-              src="/logo/biospectra-logo.jpg" 
-              alt="Biospectra Logo" 
-              className="w-10 h-10 rounded-xl object-contain shadow-sm border border-slate-100 bg-white p-1" 
-            />
-            <div>
-              <h1 className="m-0 text-base font-black text-[#133215] tracking-tight leading-tight uppercase" style={{ fontFamily: 'var(--font-playfair), serif' }}>Biospectra</h1>
-              <span className="text-[0.6rem] font-bold text-[#92B775] uppercase tracking-[0.2em]">Admin Panel</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5 flex-1">
-            {[
-              { id: 'analytics', label: 'Dashboard', icon: BarChart3 },
-              { id: 'publish', label: 'Upload New', icon: Upload },
-              { id: 'explore', label: 'All Articles', icon: Database },
-              { id: 'about', label: 'Journal Info', icon: Info },
-              { id: 'editorial', label: 'Team Board', icon: Users },
-              { id: 'gallery', label: 'Photos', icon: Image },
-              { id: 'security', label: 'Security Center', icon: ShieldCheck },
-              { id: 'audit', label: 'Security Log', icon: Shield },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`flex items-center gap-3 p-3.5 rounded-xl border-none cursor-pointer transition-all duration-300 text-[13px] ${
-                  activeTab === item.id 
-                    ? 'bg-[#133215] text-[#92B775] font-black shadow-xl shadow-[#133215]/20' 
-                    : 'bg-transparent text-[#133215]/50 font-bold hover:bg-[#eef4ec] hover:text-[#133215]'
-                }`}
-              >
-                <item.icon size={18} />
-                <span className="sidebar-text">{item.label}</span>
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-auto pt-6 border-t border-[#92B775]/10">
-            <button 
-              onClick={handleLogout}
-              className="w-full p-3.5 bg-red-50 text-red-600 border-none rounded-xl text-[10px] font-black uppercase tracking-widest cursor-pointer mb-6 transition-all hover:bg-red-100 active:scale-95"
-            >
-              Log Out
-            </button>
-            <div className="flex items-center gap-2.5 p-1">
-              <div className="w-2 h-2 bg-[#92B775] rounded-full shadow-[0_0_10px_rgba(146,183,117,0.6)] animate-pulse" />
-              <span className="text-[0.65rem] font-black text-[#133215]/30 uppercase tracking-[0.25em]">System Live</span>
-            </div>
-          </div>
-        </div>
-
-        {/* MOBILE NAV */}
-        <div className="mobile-nav">
-          {[
-            { id: 'analytics', icon: BarChart3, label: 'Stats' },
-            { id: 'publish', icon: Upload, label: 'Add' },
-            { id: 'explore', icon: Database, label: 'Papers' },
-            { id: 'about', icon: Info, label: 'Info' },
-            { id: 'editorial', icon: Users, label: 'Team' },
-            { id: 'gallery', icon: Image, label: 'Photos' },
-            { id: 'security', icon: ShieldCheck, label: 'Guard' },
-            { id: 'audit', icon: Shield, label: 'Sec' },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: activeTab === item.id ? P.primary : '#94a3b8',
-                padding: '0.4rem',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '0.2rem',
-                cursor: 'pointer'
-              }}
-            >
-              <item.icon size={18} />
-              <span style={{ fontSize: '0.6rem', fontWeight: 800 }}>{item.label}</span>
-            </button>
-          ))}
-        </div>
-
-
-        {/* MAIN CONTENT */}
-        <main className="main-content-wrapper flex-1 p-6 md:p-10 overflow-y-auto bg-[#eef4ec] custom-scrollbar">
-          <header className="header-stack flex justify-between items-center mb-6">
-            <div>
-              <h2 className="m-0 text-3xl font-black text-[#133215] tracking-tight" style={{ fontFamily: 'var(--font-playfair), serif' }}>
-                {activeTab === 'analytics' ? 'Analytics Overview' : 
-                 activeTab === 'publish' ? 'Publishing Center' :
-                 activeTab === 'explore' ? 'Content Repository' :
-                 activeTab === 'about' ? 'Journal Architect' : 
-                 activeTab === 'security' ? 'Security Center' :
-                 activeTab === 'audit' ? 'Security Audit' : 'Team Directory'}
-              </h2>
-              <p className="m-0 text-[#92B775] text-[10px] font-black uppercase tracking-[0.2em] mt-1">Editorial Administrator</p>
-            </div>
-            
-            <div className="flex gap-4 items-center mobile-hide">
-              <div className="bg-white/80 backdrop-blur-md p-2.5 px-5 rounded-2xl border border-[#92B775]/10 flex gap-8 shadow-sm">
-                 <div>
-                   <p className="m-0 text-[0.6rem] text-[#133215]/40 font-black uppercase tracking-wider">Papers</p>
-                   <p className="m-0 text-lg font-black text-[#133215]">{totalArticlesCount}</p>
-                 </div>
-                 <div className="w-px bg-[#92B775]/10" />
-                 <div>
-                   <p className="m-0 text-[0.6rem] text-[#133215]/40 font-black uppercase tracking-wider">Volumes</p>
-                   <p className="m-0 text-lg font-black text-[#133215]">{journalTree.length}</p>
-                 </div>
-              </div>
-              <button 
-                onClick={fetchData}
-                className="p-3.5 px-6 bg-[#133215] border-none rounded-xl text-[#92B775] font-black text-[10px] uppercase tracking-widest cursor-pointer flex items-center gap-2.5 shadow-lg shadow-[#133215]/10 transition-all hover:bg-[#133215]/90 active:scale-95"
-              >
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                Sync Data
-              </button>
-            </div>
-          </header>
-          
-
+      <AdminLayout
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        handleLogout={handleLogout}
+        totalArticlesCount={totalArticlesCount}
+        totalIssuesCount={totalIssuesCount}
+        syncData={fetchData}
+        P={P}
+      >
         <AnimatePresence mode="wait">
           {activeTab === 'analytics' ? (
             <AnalyticsTab 
@@ -874,8 +765,7 @@ function App() {
           ) : null}
 
         </AnimatePresence>
-          </main>
-        </div>
+      </AdminLayout>
       )}
 
 
@@ -956,7 +846,13 @@ function App() {
       </AnimatePresence>
       <MfaModal 
         isOpen={mfaModal.isOpen} 
-        onClose={() => setMfaModal({ ...mfaModal, isOpen: false })}
+        onClose={() => {
+          if (mfaModal.onReject) {
+            mfaModal.onReject();
+          } else {
+            setMfaModal({ ...mfaModal, isOpen: false });
+          }
+        }}
         onSuccess={mfaModal.onResolve}
       />
     </>

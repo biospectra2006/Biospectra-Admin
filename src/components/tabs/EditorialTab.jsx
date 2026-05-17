@@ -45,26 +45,36 @@ const EditorialTab = ({
                <h3 style={{ margin: 0, fontWeight: 950, fontSize: '1.1rem', color: '#0f172a', letterSpacing: '-0.02em' }}>Editorial Board</h3>
             </div>
             
-            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-              <div style={{ position: 'relative', width: '200px' }}>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <div style={{ position: 'relative', width: '220px' }}>
                 <Search style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={14} />
                 <input 
                   placeholder="Filter members..." 
                   value={memberSearch} 
                   onChange={e => setMemberSearch(e.target.value)}
-                  style={{ padding: '0.6rem 0.85rem 0.6rem 2.25rem', fontSize: '0.8rem', borderRadius: '0.85rem', background: '#f8fafc', border: '1px solid #f1f5f9', fontWeight: 500 }} 
+                  style={{ 
+                    width: '100%', boxSizing: 'border-box',
+                    padding: '0.65rem 0.85rem 0.65rem 2.25rem', 
+                    fontSize: '0.8rem', borderRadius: '1rem', 
+                    background: '#f8fafc', border: '1px solid #e2e8f0', 
+                    fontWeight: 600, color: '#1e293b', outline: 'none',
+                    transition: 'border-color 0.2s'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = P.secondary}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
                 />
               </div>
               
               <button 
                 onClick={() => setShowModal(true)}
-                className="primary hover-lift" 
+                className="hover-lift" 
                 style={{ 
                   padding: '0.65rem 1.25rem', fontSize: '0.8rem', fontWeight: 900, 
                   borderRadius: '1rem', display: 'flex', alignItems: 'center', gap: '0.6rem',
                   background: P.secondary, color: 'white', border: 'none', cursor: 'pointer',
-                  boxShadow: `0 8px 16px ${P.secondary}20`,
-                  transition: 'all 0.3s ease'
+                  boxShadow: `0 8px 16px ${P.secondary}30`,
+                  transition: 'all 0.3s ease',
+                  whiteSpace: 'nowrap'
                 }}
               >
                 Onboard Member <Users size={14} />
