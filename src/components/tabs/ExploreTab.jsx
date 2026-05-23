@@ -6,6 +6,13 @@ import {
   ExternalLink, Pencil, Target 
 } from 'lucide-react';
 
+const parseAcademicText = (text) => {
+  if (!text) return '';
+  return text.replace(/\^([a-zA-Z0-9,]+)(\*?)/g, (match, markers, asterisk) => {
+    return `<sup>${markers}</sup>${asterisk}`;
+  });
+};
+
 const ExploreTab = ({
   P,
   journalTree,
@@ -19,6 +26,8 @@ const ExploreTab = ({
   explorerSearch,
   setExplorerSearch,
   handleDeleteYear,
+  handleDeleteIssue,
+  handleEditIssue,
   handleDeleteCategory,
   handleDeleteArticle,
   onDragStart,
@@ -198,9 +207,49 @@ const ExploreTab = ({
                   </div>
                   <span style={{ fontSize: '0.8rem', fontWeight: 800, color: activeIssue?._id === issue._id ? '#1e40af' : '#475569' }}>{issue.title}</span>
                 </div>
-                <span style={{ fontSize: '0.65rem', background: activeIssue?._id === issue._id ? P.secondary : '#f1f5f9', color: activeIssue?._id === issue._id ? 'white' : '#94a3b8', padding: '0.2rem 0.6rem', borderRadius: '2rem', fontWeight: 800 }}>
-                  {issue.categories.reduce((a, c) => a + (c.articles?.length || 0), 0)}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {activeIssue?._id === issue._id && (
+                    <>
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          handleEditIssue(issue._id, issue.title); 
+                        }}
+                        style={{ 
+                          padding: '0.4rem', border: 'none', background: '#f0f4ff', 
+                          color: P.secondary, cursor: 'pointer', borderRadius: '0.5rem',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.2s',
+                          zIndex: 20
+                        }}
+                        onMouseOver={e => e.currentTarget.style.background = '#dbeafe'}
+                        onMouseOut={e => e.currentTarget.style.background = '#f0f4ff'}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          handleDeleteIssue(issue._id, issue.title); 
+                        }}
+                        style={{ 
+                          padding: '0.4rem', border: 'none', background: '#fff1f2', 
+                          color: '#ef4444', cursor: 'pointer', borderRadius: '0.5rem',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.2s',
+                          zIndex: 20
+                        }}
+                        onMouseOver={e => e.currentTarget.style.background = '#ffe4e6'}
+                        onMouseOut={e => e.currentTarget.style.background = '#fff1f2'}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </>
+                  )}
+                  <span style={{ fontSize: '0.65rem', background: activeIssue?._id === issue._id ? P.secondary : '#f1f5f9', color: activeIssue?._id === issue._id ? 'white' : '#94a3b8', padding: '0.2rem 0.6rem', borderRadius: '2rem', fontWeight: 800 }}>
+                    {issue.categories.reduce((a, c) => a + (c.articles?.length || 0), 0)}
+                  </span>
+                </div>
               </motion.button>
             ))}
           </div>
@@ -276,7 +325,10 @@ const ExploreTab = ({
                           style={{ margin: 0, fontSize: '0.8rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.4 }}
                           dangerouslySetInnerHTML={{ __html: art.title }}
                         />
-                        <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}>{art.authors}</p>
+                        <p 
+                          style={{ margin: '0.25rem 0 0 0', fontSize: '0.7rem', color: '#64748b', fontWeight: 600 }}
+                          dangerouslySetInnerHTML={{ __html: parseAcademicText(art.authors) }}
+                        />
                       </div>
                       <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
                         <button 
@@ -389,7 +441,7 @@ const ExploreTab = ({
                             />
                             <div style={{ display: 'flex', gap: '1rem', marginTop: '0.4rem' }}>
                               <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <Users size={12} /> {art.authors}
+                                <Users size={12} /> <span dangerouslySetInnerHTML={{ __html: parseAcademicText(art.authors) }} />
                               </p>
                               {art.doi && (
                                 <p style={{ margin: 0, fontSize: '0.75rem', color: P.primary, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>

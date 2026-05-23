@@ -26,7 +26,6 @@ const MfaModal = ({ isOpen, onClose, onSuccess }) => {
     try {
       await verifyMfaStepup(code);
       onSuccess();
-      onClose();
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid verification code');
     } finally {

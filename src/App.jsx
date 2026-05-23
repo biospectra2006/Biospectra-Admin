@@ -32,8 +32,11 @@ import {
   updateGalleryImage,
   deleteGalleryImage,
   deleteYear,
+  deleteIssue,
+  updateIssue,
   getMfaSetup,
   verifyMfaSetup,
+  getMe,
   logout as apiLogout
 } from './services/api';
 import Login from './Login';
@@ -51,30 +54,47 @@ import AdminLayout from './components/layout/AdminLayout';
 function App() {
   const [journalTree, setJournalTree] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('spectra_admin_user'));
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    !!localStorage.getItem('spectra_admin_user') ||
+    new URLSearchParams(window.location.search).get('auth') === 'success'
+  );
   const [submitting, setSubmitting] = useState(false);
   const [health, setHealth] = useState({ db: 'CHECKING', cloudinary: 'OK' });
   const [activeTab, setActiveTab] = useState('analytics');
   const [mfaModal, setMfaModal] = useState({ isOpen: false, onResolve: null });
 
-  // Handle Google OAuth callback redirect
+  // Handle auth state on mount (Google OAuth redirect or page reload)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    const userStr = params.get('user');
+    const initAuth = async () => {
+      const params = new URLSearchParams(window.location.search);
 
-    if (token && userStr) {
-      try {
-        const user = JSON.parse(decodeURIComponent(userStr));
-        localStorage.setItem('spectra_admin_token', token);
-        localStorage.setItem('spectra_admin_user', JSON.stringify(user));
-        setIsAuthenticated(true);
-        // Clean up URL
+      // Google OAuth callback - cookies already set by server
+      if (params.get('auth') === 'success') {
         window.history.replaceState({}, document.title, window.location.pathname);
-      } catch (e) {
-        console.error('Error parsing Google login data:', e);
+        try {
+          const user = await getMe();
+          localStorage.setItem('spectra_admin_user', JSON.stringify(user));
+          setIsAuthenticated(true);
+        } catch {
+          setIsAuthenticated(false);
+        }
+        return;
       }
-    }
+
+      // Normal reload - verify existing session via cookies
+      if (localStorage.getItem('spectra_admin_user')) {
+        try {
+          const user = await getMe();
+          localStorage.setItem('spectra_admin_user', JSON.stringify(user));
+          setIsAuthenticated(true);
+        } catch {
+          localStorage.removeItem('spectra_admin_user');
+          setIsAuthenticated(false);
+        }
+      }
+    };
+
+    initAuth();
   }, []);
 
   // Centralized Theme Palette
@@ -120,27 +140,47 @@ function App() {
   // Helper to handle MFA Step-up Challenges
   const withMfa = (action) => {
     return new Promise((resolve, reject) => {
-      if (isElevated) {
-        Promise.resolve(action()).then(resolve).catch(reject);
-        return;
-      }
-      setMfaModal({
-        isOpen: true,
-        onResolve: async () => {
-          try {
-            setMfaVerifiedAt(Date.now());
-            setMfaModal({ isOpen: false, onResolve: null, onReject: null });
-            const result = await action();
-            resolve(result);
-          } catch (err) {
+      const executeAction = async () => {
+        try {
+          const result = await action();
+          resolve(result);
+        } catch (err) {
+          if (err.response && err.response.status === 403 && err.response.data?.status === 'mfa_required') {
+            setMfaVerifiedAt(null);
+            triggerMfaModal(action).then(resolve).catch(reject);
+          } else {
             reject(err);
           }
-        },
-        onReject: () => {
-          setMfaModal({ isOpen: false, onResolve: null, onReject: null });
-          reject(new Error('MFA_CANCELLED'));
         }
-      });
+      };
+
+      const triggerMfaModal = (act) => {
+        return new Promise((res, rej) => {
+          setMfaModal({
+            isOpen: true,
+            onResolve: async () => {
+              try {
+                setMfaVerifiedAt(Date.now());
+                setMfaModal({ isOpen: false, onResolve: null, onReject: null });
+                const result = await act();
+                res(result);
+              } catch (err) {
+                rej(err);
+              }
+            },
+            onReject: () => {
+              setMfaModal({ isOpen: false, onResolve: null, onReject: null });
+              rej(new Error('MFA_CANCELLED'));
+            }
+          });
+        });
+      };
+
+      if (isElevated) {
+        executeAction();
+      } else {
+        triggerMfaModal(action).then(resolve).catch(reject);
+      }
     });
   };
 
@@ -188,7 +228,9 @@ function App() {
     title: '', 
     message: '', 
     onConfirm: null,
-    isAlert: false 
+    isAlert: false,
+    isPrompt: false,
+    promptValue: ''
   });
   const [editingArticle, setEditingArticle] = useState(null);
   const [publishStep, setPublishStep] = useState(1); // 1: Context, 2: Metadata, 3: Finalize
@@ -201,11 +243,23 @@ function App() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const showConfirm = (title, message, onConfirm) => {
-    setModal({ isOpen: true, title, message, onConfirm, isAlert: false });
+    setModal({ isOpen: true, title, message, onConfirm, isAlert: false, isPrompt: false });
   };
 
   const showAlert = (title, message) => {
-    setModal({ isOpen: true, title, message, onConfirm: () => setModal({ ...modal, isOpen: false }), isAlert: true });
+    setModal({ isOpen: true, title, message, onConfirm: () => setModal({ ...modal, isOpen: false }), isAlert: true, isPrompt: false });
+  };
+
+  const showPrompt = (title, message, initialValue, onConfirm) => {
+    setModal({
+      isOpen: true,
+      title,
+      message,
+      onConfirm,
+      isAlert: false,
+      isPrompt: true,
+      promptValue: initialValue
+    });
   };
 
   useEffect(() => {
@@ -296,11 +350,12 @@ function App() {
     if (!newYearInput) return;
     setSubmitting(true);
     try {
-      await createYear(parseInt(newYearInput));
+      await withMfa(() => createYear(parseInt(newYearInput)));
       setNewYearInput('');
       await fetchData();
     } catch (error) {
-      showAlert('Error', 'Year already exists or server error');
+      if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
+      showAlert('Error', error.response?.data?.message || 'Year already exists or server error');
     } finally {
       setSubmitting(false);
     }
@@ -311,10 +366,11 @@ function App() {
     if (!activeIssue || !newCategoryInput) return;
     setSubmitting(true);
     try {
-      await createCategory(activeIssue._id, newCategoryInput);
+      await withMfa(() => createCategory(activeIssue._id, newCategoryInput));
       setNewCategoryInput('');
       await fetchData();
     } catch (error) {
+      if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
       const msg = error.response?.data?.message || error.message || 'Failed to create section';
       showAlert('Error', msg);
     } finally {
@@ -331,7 +387,7 @@ function App() {
     try {
       if (editingArticle) {
         // Handle Update (Metadata only for now, file update can be added if needed)
-        await updateArticle(editingArticle._id, {
+        await withMfa(() => updateArticle(editingArticle._id, {
           title: articleData.title,
           authors: articleData.authors,
           abstract: articleData.abstract,
@@ -339,7 +395,7 @@ function App() {
           doi: articleData.doi,
           affiliation: articleData.affiliation,
           categoryId: activeCategory._id
-        });
+        }));
         showAlert('Success', 'Article metadata updated!');
         setEditingArticle(null);
       } else {
@@ -422,6 +478,40 @@ function App() {
     );
   };
 
+  const handleDeleteIssue = async (id, title) => {
+    showConfirm(
+      'Delete Issue', 
+      `Are you sure you want to delete ${title}? This will permanently delete all sections and articles inside it, including files.`, 
+      async () => {
+        try {
+          await withMfa(() => deleteIssue(id));
+          setActiveIssue(null);
+          await fetchData();
+          showAlert('Success', `Issue ${title} deleted successfully.`);
+        } catch (error) {
+          if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
+          console.error('Delete Issue Error:', error);
+          showAlert('Error', 'Failed to delete issue: ' + (error.response?.data?.message || error.message));
+        }
+      }
+    );
+  };
+
+  const handleEditIssue = async (id, currentTitle) => {
+    showPrompt('Edit Issue Title', 'Enter new title for this issue:', currentTitle, async (newTitle) => {
+      if (!newTitle || newTitle === currentTitle) return;
+      try {
+        await withMfa(() => updateIssue(id, { title: newTitle }));
+        await fetchData();
+        showAlert('Success', `Issue updated successfully.`);
+      } catch (error) {
+        if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
+        console.error('Edit Issue Error:', error);
+        showAlert('Error', 'Failed to edit issue: ' + (error.response?.data?.message || error.message));
+      }
+    });
+  };
+
   // Drag and Drop Handlers
   const onDragStart = (e, articleId) => {
     e.dataTransfer.setData('articleId', articleId);
@@ -454,9 +544,10 @@ function App() {
     if (!articleId) return;
 
     try {
-      await updateArticle(articleId, { categoryId: targetCategoryId });
+      await withMfa(() => updateArticle(articleId, { categoryId: targetCategoryId }));
       await fetchData();
     } catch (error) {
+      if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
       showAlert('Error', 'Failed to move article');
     }
   };
@@ -485,9 +576,10 @@ function App() {
   const handleDeleteAbout = async (id) => {
     showConfirm('Delete Section', 'Remove this about section?', async () => {
       try {
-        await deleteAboutSection(id);
+        await withMfa(() => deleteAboutSection(id));
         await fetchAboutData();
       } catch (error) {
+        if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
         showAlert('Error', 'Delete failed');
       }
     });
@@ -601,9 +693,10 @@ function App() {
   const handleDeleteGalleryImage = async (id) => {
     showConfirm('Delete Image', 'This will permanently remove the image from the gallery.', async () => {
       try {
-        await deleteGalleryImage(id);
+        await withMfa(() => deleteGalleryImage(id));
         await fetchGalleryData();
       } catch (error) {
+        if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
         showAlert('Error', 'Delete failed');
       }
     });
@@ -724,6 +817,8 @@ function App() {
               explorerSearch={explorerSearch}
               setExplorerSearch={setExplorerSearch}
               handleDeleteYear={handleDeleteYear}
+              handleDeleteIssue={handleDeleteIssue}
+              handleEditIssue={handleEditIssue}
               handleDeleteCategory={handleDeleteCategory}
               handleDeleteArticle={handleDeleteArticle}
               onDragStart={onDragStart}
@@ -790,7 +885,18 @@ function App() {
                 </div>
                 <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 900, color: '#0f172a' }}>{modal.title}</h3>
               </div>
-              <p style={{ margin: '0 0 2rem 0', fontSize: '0.9rem', color: '#64748b', lineHeight: 1.6, fontWeight: 500 }}>{modal.message}</p>
+              <p style={{ margin: modal.isPrompt ? '0 0 1rem 0' : '0 0 2rem 0', fontSize: '0.9rem', color: '#64748b', lineHeight: 1.6, fontWeight: 500 }}>{modal.message}</p>
+              {modal.isPrompt && (
+                <input 
+                  type="text" 
+                  value={modal.promptValue} 
+                  onChange={(e) => setModal({ ...modal, promptValue: e.target.value })} 
+                  style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.75rem', border: '2px solid #e2e8f0', marginBottom: '2rem', fontSize: '0.9rem', color: '#0f172a', fontWeight: 600, outline: 'none' }}
+                  onFocus={(e) => e.target.style.borderColor = '#1e40af'}
+                  onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+                  autoFocus
+                />
+              )}
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                 {!modal.isAlert && (
                   <button 
@@ -805,7 +911,7 @@ function App() {
                     if (modal.onConfirm) {
                       setIsDeleting(true);
                       try {
-                        await modal.onConfirm();
+                        await modal.onConfirm(modal.isPrompt ? modal.promptValue : undefined);
                       } finally {
                         setIsDeleting(false);
                         setModal({ ...modal, isOpen: false }); 
@@ -819,7 +925,7 @@ function App() {
                     padding: '0.75rem 1.5rem', 
                     borderRadius: '1rem', 
                     border: 'none', 
-                    background: modal.isAlert ? '#0f172a' : '#ef4444', 
+                    background: modal.isAlert ? '#0f172a' : (modal.isPrompt ? '#1e40af' : '#ef4444'), 
                     color: 'white', 
                     fontWeight: 800, 
                     cursor: isDeleting ? 'not-allowed' : 'pointer', 
@@ -833,10 +939,10 @@ function App() {
                   {isDeleting ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      Deleting...
+                      {modal.isPrompt ? 'Saving...' : 'Deleting...'}
                     </>
                   ) : (
-                    modal.isAlert ? 'Got it' : 'Confirm Action'
+                    modal.isAlert ? 'Got it' : (modal.isPrompt ? 'Save Changes' : 'Confirm Action')
                   )}
                 </button>
               </div>

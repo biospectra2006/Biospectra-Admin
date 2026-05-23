@@ -6,6 +6,20 @@ import {
   Loader2, CheckCircle, FileText, Shield
 } from 'lucide-react';
 
+// Academic notation parser helpers for live preview
+const parseAcademicText = (text) => {
+  if (!text) return '';
+  return text.replace(/\^([a-zA-Z0-9,]+)(\*?)/g, (match, markers, asterisk) => {
+    return `<sup>${markers}</sup>${asterisk}`;
+  });
+};
+
+const parseAffiliations = (text) => {
+  if (!text) return '';
+  const parts = text.split(/\s*\|\s*|\n|(?:;\s*(?=\^))/).filter(s => s.trim());
+  return parts.map(part => parseAcademicText(part.trim())).join('<br/>');
+};
+
 const PublishTab = ({
   P,
   publishStep,
@@ -59,6 +73,7 @@ const PublishTab = ({
       el.setSelectionRange(start + 3, end + 3);
     }, 0);
   };
+    
   return (
     <motion.div 
       key="publish-tab"
@@ -253,7 +268,7 @@ const PublishTab = ({
         >
           <div style={{ background: '#f8fafc', padding: '1.25rem 2rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <h3 style={{ margin: 0, fontWeight: 950, fontSize: '1.1rem', color: '#0f172a' }}>Article Details</h3>
+              <h3 style={{ margin: 0, fontWeight: 950, fontSize: '1.1rem', color: '#0f172a' }}>{editingArticle ? 'Edit Article Details' : 'Article Details'}</h3>
               <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
                 Selected Place: <span style={{ color: P.primary }}>{activeYear?.year} • {activeIssue?.title} • {activeCategory?.title}</span>
               </p>
@@ -284,9 +299,12 @@ const PublishTab = ({
 
             <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
               <div className="form-group">
-                <label style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>AUTHORS</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>AUTHORS</label>
+                  <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600 }}>Use <code style={{ background: '#f1f5f9', padding: '0.1rem 0.25rem', borderRadius: '0.25rem', fontFamily: 'monospace' }}>^a</code> for superscript, <code style={{ background: '#f1f5f9', padding: '0.1rem 0.25rem', borderRadius: '0.25rem', fontFamily: 'monospace' }}>*</code> for corresponding</span>
+                </div>
                 <input 
-                  placeholder="e.g. Dr. John Doe, Prof. Sarah Smith" 
+                  placeholder="e.g. Dr. John Doe^a*, Prof. Jane Smith^b" 
                   style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.85rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', fontWeight: 600 }}
                   value={articleData.authors} onChange={e => setArticleData({...articleData, authors: e.target.value})} required 
                 />
@@ -302,13 +320,48 @@ const PublishTab = ({
             </div>
 
             <div className="form-group">
-              <label style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>AUTHOR AFFILIATION / DEPARTMENT</label>
-              <input 
-                placeholder="e.g. Department of Zoology, Guru Ghasidas Vishwavidyalaya..." 
-                style={{ width: '100%', padding: '0.85rem 1.25rem', borderRadius: '0.85rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', fontWeight: 600 }}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>AUTHOR AFFILIATION / DEPARTMENT</label>
+                <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600 }}>Use <code style={{ background: '#f1f5f9', padding: '0.1rem 0.25rem', borderRadius: '0.25rem', fontFamily: 'monospace' }}>|</code> or newline to separate multiple departments</span>
+              </div>
+              <textarea 
+                rows={2}
+                placeholder="e.g. ^a Department of Zoology, University of Delhi | ^b Department of Physics, IISc Bangalore" 
+                style={{ width: '100%', padding: '0.85rem 1.25rem', borderRadius: '0.85rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.4 }}
                 value={articleData.affiliation} onChange={e => setArticleData({...articleData, affiliation: e.target.value})} 
               />
             </div>
+
+            {/* Live Academic Preview Box */}
+            {(articleData.authors || articleData.affiliation) && (
+              <div style={{ 
+                background: '#f8fafc', 
+                border: '1px solid #e2e8f0', 
+                borderRadius: '1rem', 
+                padding: '1.25rem',
+                fontSize: '0.85rem',
+                fontFamily: 'serif',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem'
+              }}>
+                <div style={{ fontFamily: 'sans-serif', fontSize: '0.65rem', fontWeight: 900, color: P.primary, textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.35rem', marginBottom: '0.25rem' }}>
+                  Live Academic Rendering Preview
+                </div>
+                {articleData.authors && (
+                  <p 
+                    style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0f172a' }}
+                    dangerouslySetInnerHTML={{ __html: parseAcademicText(articleData.authors) }}
+                  />
+                )}
+                {articleData.affiliation && (
+                  <p 
+                    style={{ margin: 0, fontSize: '0.8rem', color: '#475569', fontStyle: 'italic', lineHeight: 1.5 }}
+                    dangerouslySetInnerHTML={{ __html: parseAffiliations(articleData.affiliation) }}
+                  />
+                )}
+              </div>
+            )}
 
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>

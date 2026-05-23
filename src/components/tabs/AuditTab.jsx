@@ -50,6 +50,16 @@ const AuditTab = ({ P }) => {
     return <Monitor size={18} />;
   };
 
+  const getMfaStatus = (mfaVerifiedAt) => {
+    if (!mfaVerifiedAt) return null;
+    const verifiedTime = new Date(mfaVerifiedAt).getTime();
+    const now = Date.now();
+    const ELEVATION_TIMEOUT = 30 * 60 * 1000;
+    const timeLeft = ELEVATION_TIMEOUT - (now - verifiedTime);
+    if (timeLeft <= 0) return null;
+    return Math.ceil(timeLeft / 60000);
+  };
+
   return (
     <div className="audit-tab-container">
       <header style={{ marginBottom: '2rem' }}>
@@ -77,7 +87,9 @@ const AuditTab = ({ P }) => {
           </div>
         ) : (
           <AnimatePresence>
-            {sessions.map((session, index) => (
+            {sessions.map((session, index) => {
+              const mfaMinutesLeft = getMfaStatus(session.mfaVerifiedAt);
+              return (
               <motion.div
                 key={session.id}
                 initial={{ opacity: 0, y: 10 }}
@@ -165,13 +177,26 @@ const AuditTab = ({ P }) => {
                   </button>
                 )}
                 {session.isCurrent && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: P.primary, fontSize: '0.75rem', fontWeight: 800 }}>
-                    <CheckCircle2 size={16} />
-                    Active Now
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    {mfaMinutesLeft ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#16a34a', fontSize: '0.7rem', fontWeight: 800, background: '#dcfce7', padding: '0.35rem 0.75rem', borderRadius: '1rem' }}>
+                        <Shield size={14} />
+                        Elevated ({mfaMinutesLeft}m)
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: '#64748b', fontSize: '0.7rem', fontWeight: 800, background: '#f1f5f9', padding: '0.35rem 0.75rem', borderRadius: '1rem' }}>
+                        <Shield size={14} />
+                        Standard
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: P.primary, fontSize: '0.75rem', fontWeight: 800 }}>
+                      <CheckCircle2 size={16} />
+                      Active Now
+                    </div>
                   </div>
                 )}
               </motion.div>
-            ))}
+            )})}
           </AnimatePresence>
         )}
       </div>

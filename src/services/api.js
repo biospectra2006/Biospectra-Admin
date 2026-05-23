@@ -7,6 +7,20 @@ const api = axios.create({
     withCredentials: true,
 });
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach((prom) => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
 // We no longer need the request interceptor to add the Bearer token manually
 // because 'withCredentials: true' automatically sends the HttpOnly cookie.
 
@@ -26,22 +40,38 @@ api.interceptors.response.use(
             !originalRequest.url.includes('/auth/login') &&
             !originalRequest.url.includes('/auth/verify-mfa-stepup')
         ) {
-            originalRequest._retry = true;
-
-            try {
-                // Attempt to refresh the token
-                const response = await api.post('/auth/refresh-token');
-                if (response.data.status === 'success') {
-                    // The new token is automatically set as an HttpOnly cookie by the server
-                    // Retry the original request with the new cookie
-                    return api(originalRequest);
-                }
-            } catch (refreshError) {
-                // Refresh failed - logout user
-                localStorage.removeItem('spectra_admin_token');
-                localStorage.removeItem('spectra_admin_user');
-                window.location.reload();
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                })
+                .then(() => api(originalRequest))
+                .catch((err) => Promise.reject(err));
             }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            return new Promise((resolve, reject) => {
+                api.post('/auth/refresh-token')
+                    .then((response) => {
+                        if (response.data.status === 'success') {
+                            processQueue(null, response.data.token);
+                            resolve(api(originalRequest));
+                        } else {
+                            processQueue(new Error('Refresh failed'), null);
+                            reject(error);
+                        }
+                    })
+                    .catch((err) => {
+                        processQueue(err, null);
+                        localStorage.removeItem('spectra_admin_user');
+                        window.location.reload();
+                        reject(err);
+                    })
+                    .finally(() => {
+                        isRefreshing = false;
+                    });
+            });
         }
         return Promise.reject(error);
     }
@@ -75,10 +105,14 @@ export const terminateSession = async (sessionId) => {
     return response.data;
 };
 
+export const getMe = async () => {
+    const response = await api.get('/auth/me');
+    return response.data.user;
+};
+
 export const loginMfa = async (userId, token) => {
     const response = await api.post('/auth/login-mfa', { userId, token });
-    if (response.data.token) {
-        localStorage.setItem('spectra_admin_token', response.data.token);
+    if (response.data.user) {
         localStorage.setItem('spectra_admin_user', JSON.stringify(response.data.user));
     }
     return response.data;
@@ -143,6 +177,16 @@ export const deleteCategory = async (id) => {
 
 export const deleteYear = async (id) => {
     const response = await api.delete(`/articles/year/${id}`);
+    return response.data;
+};
+
+export const deleteIssue = async (id) => {
+    const response = await api.delete(`/articles/issue/${id}`);
+    return response.data;
+};
+
+export const updateIssue = async (id, data) => {
+    const response = await api.put(`/articles/issue/${id}`, data);
     return response.data;
 };
 

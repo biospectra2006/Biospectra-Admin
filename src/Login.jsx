@@ -20,6 +20,29 @@ const Login = ({ onLoginSuccess }) => {
     setErrorTimer(timer);
   };
 
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const errorParam = params.get('error');
+    const userIdParam = params.get('userId');
+
+    if (errorParam === 'mfa_required' && userIdParam) {
+      setMfaRequired(true);
+      setUserId(userIdParam);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (errorParam) {
+      if (errorParam === 'unauthorized') {
+        showError('Access restricted to administrators only.');
+      } else if (errorParam === 'csrf') {
+        showError('Security check failed (CSRF mismatch). Please try again.');
+      } else if (errorParam === 'auth_failed') {
+        showError('Google authentication failed. Please try again.');
+      } else {
+        showError('An error occurred during login. Please try again.');
+      }
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
