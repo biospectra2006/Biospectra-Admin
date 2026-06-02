@@ -9,6 +9,15 @@ const api = axios.create({
 
 let isRefreshing = false;
 let failedQueue = [];
+let accessToken = null;
+
+const setAccessToken = (token) => {
+    accessToken = token;
+};
+
+const clearAccessToken = () => {
+    accessToken = null;
+};
 
 const processQueue = (error, token = null) => {
     failedQueue.forEach((prom) => {
@@ -21,8 +30,16 @@ const processQueue = (error, token = null) => {
     failedQueue = [];
 };
 
-// We no longer need the request interceptor to add the Bearer token manually
-// because 'withCredentials: true' automatically sends the HttpOnly cookie.
+// Request interceptor: attach Bearer token if available
+api.interceptors.request.use(
+    (config) => {
+        if (accessToken) {
+            config.headers.Authorization = `Bearer ${accessToken}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
 
 // Add a response interceptor to handle 401s and token refresh
 api.interceptors.response.use(
@@ -38,6 +55,7 @@ api.interceptors.response.use(
             !originalRequest._retry &&
             !originalRequest.url.includes('/auth/refresh-token') &&
             !originalRequest.url.includes('/auth/login') &&
+            !originalRequest.url.includes('/auth/logout') &&
             !originalRequest.url.includes('/auth/verify-mfa-stepup')
         ) {
             if (isRefreshing) {
@@ -55,7 +73,10 @@ api.interceptors.response.use(
                 api.post('/auth/refresh-token')
                     .then((response) => {
                         if (response.data.status === 'success') {
-                            processQueue(null, response.data.token);
+                            if (response.data.token) {
+                                setAccessToken(response.data.token);
+                            }
+                            processQueue(null, null);
                             resolve(api(originalRequest));
                         } else {
                             processQueue(new Error('Refresh failed'), null);
@@ -64,8 +85,9 @@ api.interceptors.response.use(
                     })
                     .catch((err) => {
                         processQueue(err, null);
+                        clearAccessToken();
                         localStorage.removeItem('spectra_admin_user');
-                        window.location.reload();
+                        window.location.href = '/';
                         reject(err);
                     })
                     .finally(() => {
@@ -88,9 +110,10 @@ export const login = async (username, password) => {
 export const logout = async () => {
     try {
         await api.post('/auth/logout');
-    } catch (err) {
-        console.error('Logout error:', err);
+    } catch {
+        // Session may already be expired — ignore
     } finally {
+        clearAccessToken();
         localStorage.removeItem('spectra_admin_user');
     }
 };

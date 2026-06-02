@@ -54,10 +54,8 @@ import AdminLayout from './components/layout/AdminLayout';
 function App() {
   const [journalTree, setJournalTree] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    !!localStorage.getItem('spectra_admin_user') ||
-    new URLSearchParams(window.location.search).get('auth') === 'success'
-  );
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [health, setHealth] = useState({ db: 'CHECKING', cloudinary: 'OK' });
   const [activeTab, setActiveTab] = useState('analytics');
@@ -66,6 +64,7 @@ function App() {
   // Handle auth state on mount (Google OAuth redirect or page reload)
   useEffect(() => {
     const initAuth = async () => {
+      setAuthLoading(true);
       const params = new URLSearchParams(window.location.search);
 
       // Google OAuth callback - cookies already set by server
@@ -78,6 +77,7 @@ function App() {
         } catch {
           setIsAuthenticated(false);
         }
+        setAuthLoading(false);
         return;
       }
 
@@ -91,7 +91,10 @@ function App() {
           localStorage.removeItem('spectra_admin_user');
           setIsAuthenticated(false);
         }
+      } else {
+        setIsAuthenticated(false);
       }
+      setAuthLoading(false);
     };
 
     initAuth();
@@ -124,15 +127,9 @@ function App() {
       'Confirm Logout',
       'Are you sure you want to end your administrative session?',
       async () => {
-        try {
-          await apiLogout();
-        } catch (err) {
-          console.error('Logout error:', err);
-        } finally {
-          setIsAuthenticated(false);
-          localStorage.removeItem('spectra_admin_user');
-          window.location.href = '/'; // Reset to root to avoid Vercel 404s
-        }
+        await apiLogout();
+        setIsAuthenticated(false);
+        window.location.href = '/';
       }
     );
   };
@@ -728,7 +725,14 @@ function App() {
 
   return (
     <>
-      {!isAuthenticated ? (
+      {authLoading ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#eef4ec' }}>
+          <div style={{ textAlign: 'center' }}>
+            <Loader2 size={40} className="animate-spin" color="#133215" />
+            <p style={{ marginTop: '1rem', color: '#133215', fontWeight: 600 }}>Verifying session...</p>
+          </div>
+        </div>
+      ) : !isAuthenticated ? (
         <Login onLoginSuccess={() => setIsAuthenticated(true)} />
       ) : (
       <AdminLayout
