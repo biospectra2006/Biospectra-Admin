@@ -463,6 +463,7 @@ const ExploreTab = ({
                                   abstract: art.abstract,
                                   keywords: art.keywords?.join(', ') || '',
                                   doi: art.doi || '',
+                                  pages: art.pages || '',
                                   affiliation: art.affiliation || '',
                                   file: null
                                 });

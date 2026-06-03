@@ -3,7 +3,8 @@ import { motion } from 'framer-motion';
 import { 
   Calendar, BookOpen, Layers, Plus, 
   ChevronRight, ArrowRight, Upload, 
-  Loader2, CheckCircle, FileText, Shield
+  Loader2, CheckCircle, FileText, Shield,
+  Trash2, Pencil
 } from 'lucide-react';
 
 // Academic notation parser helpers for live preview
@@ -35,14 +36,20 @@ const PublishTab = ({
   currentIssueData,
   newYearInput,
   setNewYearInput,
+  newIssueInput,
+  setNewIssueInput,
   newCategoryInput,
   setNewCategoryInput,
   handleCreateYear,
+  handleCreateIssue,
+  handleEditIssue,
+  handleDeleteIssue,
   handleCreateCategory,
   handleUploadArticle,
   articleData,
   setArticleData,
   submitting,
+  uploadStatus,
   editingArticle,
   setEditingArticle,
   isElevated
@@ -179,22 +186,58 @@ const PublishTab = ({
               {activeYear ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {currentYearData?.issues.map(issue => (
-                    <motion.button
+                    <div
                       key={issue._id}
-                      whileHover={{ x: 5 }}
-                      onClick={() => { setActiveIssue(issue); setActiveCategory(null); }}
                       style={{
-                        padding: '1rem 1.25rem', textAlign: 'left', borderRadius: '1rem', border: '1.5px solid',
-                        background: activeIssue?._id === issue._id ? 'white' : '#fcfcfc',
-                        borderColor: activeIssue?._id === issue._id ? P.primary : '#f1f5f9',
-                        color: '#0f172a', cursor: 'pointer', transition: 'all 0.3s',
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        display: 'flex', gap: '0.5rem', alignItems: 'stretch'
                       }}
                     >
-                      <span style={{ fontWeight: 850, fontSize: '0.85rem' }}>{issue.title}</span>
-                      <ChevronRight size={14} color={activeIssue?._id === issue._id ? P.primary : '#cbd5e1'} />
-                    </motion.button>
+                      <motion.button
+                        whileHover={{ x: 5 }}
+                        onClick={() => { setActiveIssue(issue); setActiveCategory(null); }}
+                        style={{
+                          flex: 1, padding: '1rem 1.25rem', textAlign: 'left', borderRadius: '1rem', border: '1.5px solid',
+                          background: activeIssue?._id === issue._id ? 'white' : '#fcfcfc',
+                          borderColor: activeIssue?._id === issue._id ? P.primary : '#f1f5f9',
+                          color: '#0f172a', cursor: 'pointer', transition: 'all 0.3s',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}
+                      >
+                        <span style={{ fontWeight: 850, fontSize: '0.85rem' }}>{issue.title}</span>
+                        <ChevronRight size={14} color={activeIssue?._id === issue._id ? P.primary : '#cbd5e1'} />
+                      </motion.button>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={(e) => { e.stopPropagation(); handleEditIssue(issue._id, issue.title); }}
+                          style={{ padding: '0.5rem', borderRadius: '0.6rem', border: '1.5px solid #e2e8f0', background: 'white', color: '#3b82f6', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Edit Issue"
+                        >
+                          <Pencil size={14} />
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteIssue(issue._id, issue.title); }}
+                          style={{ padding: '0.5rem', borderRadius: '0.6rem', border: '1.5px solid #fecaca', background: '#fef2f2', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Delete Issue"
+                        >
+                          <Trash2 size={14} />
+                        </motion.button>
+                      </div>
+                    </div>
                   ))}
+                  <form onSubmit={handleCreateIssue} style={{ marginTop: '0.5rem', display: 'flex', gap: '0.6rem', background: '#f8fafc', padding: '0.5rem', borderRadius: '1.25rem', border: '1px solid #f1f5f9' }}>
+                    <input 
+                      placeholder="New Issue..." 
+                      style={{ flex: 1, padding: '0.6rem 0.75rem', border: 'none', background: 'transparent', fontSize: '0.85rem', fontWeight: 700 }}
+                      value={newIssueInput} onChange={e => setNewIssueInput(e.target.value)}
+                    />
+                    <button type="submit" style={{ width: 32, height: 32, borderRadius: '50%', background: P.secondary, border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Plus size={16} />
+                    </button>
+                  </form>
                 </div>
               ) : (
                 <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '2rem' }}>
@@ -297,26 +340,16 @@ const PublishTab = ({
               />
             </div>
 
-            <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-              <div className="form-group">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>AUTHORS</label>
-                  <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600 }}>Use <code style={{ background: '#f1f5f9', padding: '0.1rem 0.25rem', borderRadius: '0.25rem', fontFamily: 'monospace' }}>^a</code> for superscript, <code style={{ background: '#f1f5f9', padding: '0.1rem 0.25rem', borderRadius: '0.25rem', fontFamily: 'monospace' }}>*</code> for corresponding</span>
-                </div>
-                <input 
-                  placeholder="e.g. Dr. John Doe^a*, Prof. Jane Smith^b" 
-                  style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.85rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', fontWeight: 600 }}
-                  value={articleData.authors} onChange={e => setArticleData({...articleData, authors: e.target.value})} required 
-                />
+            <div className="form-group">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>AUTHORS</label>
+                <span style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600 }}>Use <code style={{ background: '#f1f5f9', padding: '0.1rem 0.25rem', borderRadius: '0.25rem', fontFamily: 'monospace' }}>^a</code> for superscript, <code style={{ background: '#f1f5f9', padding: '0.1rem 0.25rem', borderRadius: '0.25rem', fontFamily: 'monospace' }}>*</code> for corresponding</span>
               </div>
-              <div className="form-group">
-                <label style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>DOI / DIGITAL ID</label>
-                <input 
-                  placeholder="e.g. 10.1234/journal.2024.001" 
-                  style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.85rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', fontWeight: 600 }}
-                  value={articleData.doi} onChange={e => setArticleData({...articleData, doi: e.target.value})} 
-                />
-              </div>
+              <input 
+                placeholder="e.g. Dr. John Doe^a*, Prof. Jane Smith^b" 
+                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.85rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', fontWeight: 600 }}
+                value={articleData.authors} onChange={e => setArticleData({...articleData, authors: e.target.value})} required 
+              />
             </div>
 
             <div className="form-group">
@@ -382,13 +415,21 @@ const PublishTab = ({
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr', gap: '1.5rem' }}>
               <div className="form-group">
                 <label style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>KEYWORDS</label>
                 <input 
                   placeholder="Separate with commas..." 
                   style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.85rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', fontWeight: 600 }}
                   value={articleData.keywords} onChange={e => setArticleData({...articleData, keywords: e.target.value})} 
+                />
+              </div>
+              <div className="form-group">
+                <label style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>PAGES <span style={{ fontWeight: 500, fontSize: '0.65rem', color: '#94a3b8' }}>(auto-fetched from PDF if empty)</span></label>
+                <input 
+                  placeholder="Leave empty to auto-calculate from PDF" 
+                  style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.85rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', fontWeight: 600 }}
+                  value={articleData.pages} onChange={e => setArticleData({...articleData, pages: e.target.value})} 
                 />
               </div>
               <div className="form-group">
@@ -461,15 +502,18 @@ const PublishTab = ({
                  boxShadow: isElevated ? `0 10px 20px ${P.primary}30` : '0 10px 30px rgba(19, 50, 21, 0.1)' 
                }}
              >
-               {submitting ? (
-                 <Loader2 size={24} className="animate-spin" />
-               ) : !isElevated ? (
-                 <>
-                   <Shield size={20} /> Verify & Publish
-                 </>
-               ) : (
-                 'Publish Now'
-               )}
+              {submitting ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <Loader2 size={24} className="animate-spin" />
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>{uploadStatus || 'Processing...'}</span>
+                  </span>
+                ) : !isElevated ? (
+                  <>
+                    <Shield size={20} /> Verify & Publish
+                  </>
+                ) : (
+                  'Publish Now'
+                )}
              </button>
              <button onClick={() => setPublishStep(2)} style={{ padding: '1rem', background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 850, cursor: 'pointer' }}>Edit Details</button>
            </div>

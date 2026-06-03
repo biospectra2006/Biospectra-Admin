@@ -203,6 +203,11 @@ export const deleteYear = async (id) => {
     return response.data;
 };
 
+export const createIssue = async (yearId, title) => {
+    const response = await api.post('/articles/issue', { yearId, title });
+    return response.data;
+};
+
 export const deleteIssue = async (id) => {
     const response = await api.delete(`/articles/issue/${id}`);
     return response.data;

@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   getJournalTree, 
   createYear, 
+  createIssue,
   createCategory, 
   deleteCategory,
   uploadArticle, 
@@ -57,6 +58,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
   const [health, setHealth] = useState({ db: 'CHECKING', cloudinary: 'OK' });
   const [activeTab, setActiveTab] = useState('analytics');
   const [mfaModal, setMfaModal] = useState({ isOpen: false, onResolve: null });
@@ -119,7 +121,7 @@ function App() {
   const isElevated = useMemo(() => {
     if (!mfaVerifiedAt) return false;
     const diff = Date.now() - mfaVerifiedAt;
-    return diff < 15 * 60 * 1000; // 15 minutes
+    return diff < 60 * 60 * 1000; // 60 minutes
   }, [mfaVerifiedAt]);
 
   const handleLogout = () => {
@@ -191,6 +193,7 @@ function App() {
 
   // Input States
   const [newYearInput, setNewYearInput] = useState('');
+  const [newIssueInput, setNewIssueInput] = useState('');
   const [newCategoryInput, setNewCategoryInput] = useState('');
   
   const [articleData, setArticleData] = useState({
@@ -199,6 +202,7 @@ function App() {
     abstract: '',
     keywords: '',
     doi: '',
+    pages: '',
     affiliation: '',
     file: null
   });
@@ -358,6 +362,22 @@ function App() {
     }
   };
 
+  const handleCreateIssue = async (e) => {
+    e.preventDefault();
+    if (!activeYear || !newIssueInput) return;
+    setSubmitting(true);
+    try {
+      await withMfa(() => createIssue(activeYear._id, newIssueInput));
+      setNewIssueInput('');
+      await fetchData();
+    } catch (error) {
+      if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
+      showAlert('Error', error.response?.data?.message || 'Failed to create issue');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleCreateCategory = async (e) => {
     e.preventDefault();
     if (!activeIssue || !newCategoryInput) return;
@@ -380,16 +400,18 @@ function App() {
     if (!activeCategory) return showAlert('Action Required', 'Please select a specific Section first');
     
     setSubmitting(true);
+    setUploadStatus('');
     
     try {
       if (editingArticle) {
-        // Handle Update (Metadata only for now, file update can be added if needed)
+        setUploadStatus('Updating article metadata...');
         await withMfa(() => updateArticle(editingArticle._id, {
           title: articleData.title,
           authors: articleData.authors,
           abstract: articleData.abstract,
           keywords: articleData.keywords,
           doi: articleData.doi,
+          pages: articleData.pages,
           affiliation: articleData.affiliation,
           categoryId: activeCategory._id
         }));
@@ -399,6 +421,7 @@ function App() {
         // Handle New Upload
         if (!articleData.file) {
           setSubmitting(false);
+          setUploadStatus('');
           return showAlert('Required', 'Please select a PDF file to upload.');
         }
         const formData = new FormData();
@@ -407,20 +430,24 @@ function App() {
         formData.append('abstract', articleData.abstract);
         formData.append('keywords', articleData.keywords);
         formData.append('doi', articleData.doi);
+        formData.append('pages', articleData.pages);
         formData.append('affiliation', articleData.affiliation);
         formData.append('categoryId', activeCategory._id);
         formData.append('file', articleData.file);
+        setUploadStatus('Uploading PDF to Cloudinary...');
         await withMfa(() => uploadArticle(formData));
         showAlert('Success', 'Article published successfully!');
       }
       
-      setArticleData({ title: '', authors: '', abstract: '', keywords: '', doi: '', affiliation: '', file: null });
+      setArticleData({ title: '', authors: '', abstract: '', keywords: '', doi: '', pages: '', affiliation: '', file: null });
+      setUploadStatus('Refreshing journal tree...');
       await fetchData();
     } catch (error) {
       if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
       showAlert('Operation Failed', error.response?.data?.message || 'There was an error processing your article.');
     } finally {
       setSubmitting(false);
+      setUploadStatus('');
     }
   };
 
@@ -769,14 +796,20 @@ function App() {
               currentIssueData={currentIssueData}
               newYearInput={newYearInput}
               setNewYearInput={setNewYearInput}
+              newIssueInput={newIssueInput}
+              setNewIssueInput={setNewIssueInput}
               newCategoryInput={newCategoryInput}
               setNewCategoryInput={setNewCategoryInput}
               handleCreateYear={handleCreateYear}
+              handleCreateIssue={handleCreateIssue}
+              handleEditIssue={handleEditIssue}
+              handleDeleteIssue={handleDeleteIssue}
               handleCreateCategory={handleCreateCategory}
               handleUploadArticle={handleUploadArticle}
               articleData={articleData}
               setArticleData={setArticleData}
               submitting={submitting}
+              uploadStatus={uploadStatus}
               editingArticle={editingArticle}
               setEditingArticle={setEditingArticle}
               isElevated={isElevated}
