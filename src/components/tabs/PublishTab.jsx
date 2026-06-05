@@ -10,8 +10,9 @@ import {
 // Academic notation parser helpers for live preview
 const parseAcademicText = (text) => {
   if (!text) return '';
-  return text.replace(/\^([a-zA-Z0-9,]+)(\*?)/g, (match, markers, asterisk) => {
-    return `<sup>${markers}</sup>${asterisk}`;
+  return text.replace(/(\*?)\^([a-zA-Z0-9,]+)(\*?)/g, (match, starBefore, markers, starAfter) => {
+    const hasStar = starBefore || starAfter ? '*' : '';
+    return `<sup>${markers}</sup>${hasStar}`;
   });
 };
 
