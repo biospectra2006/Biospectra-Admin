@@ -324,13 +324,24 @@ const PublishTab = ({
             <div className="form-group">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                 <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>ARTICLE TITLE</label>
-                <button 
-                  type="button"
-                  onClick={() => handleItalic('article-title')}
-                  style={{ padding: '0.2rem 0.6rem', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '0.4rem', fontSize: '0.7rem', fontWeight: 900, color: P.primary, cursor: 'pointer', fontStyle: 'italic' }}
-                >
-                  I
-                </button>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button 
+                    type="button"
+                    onClick={() => setArticleData({...articleData, title: articleData.title.replace(/<\/?i>/g, '')})}
+                    style={{ padding: '0.2rem 0.6rem', background: '#fff1f2', border: '1px solid #ffe4e6', borderRadius: '0.4rem', fontSize: '0.65rem', fontWeight: 800, color: '#ef4444', cursor: 'pointer' }}
+                    title="Remove all italics"
+                  >
+                    Clear Italics
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => handleItalic('article-title')}
+                    style={{ padding: '0.2rem 0.6rem', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '0.4rem', fontSize: '0.7rem', fontWeight: 900, color: P.primary, cursor: 'pointer', fontStyle: 'italic' }}
+                    title="Italicize selection"
+                  >
+                    I
+                  </button>
+                </div>
               </div>
               <textarea 
                 id="article-title"
