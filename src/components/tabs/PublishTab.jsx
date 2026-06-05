@@ -447,10 +447,18 @@ const PublishTab = ({
                   }} />
                   <div style={{ padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                      <div style={{ width: 28, height: 28, background: articleData.file ? P.primary : '#94a3b8', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-                       <Upload size={14} />
+                       {submitting && uploadStatus === 'Analyzing PDF structure...' ? (
+                         <Loader2 size={14} className="animate-spin" />
+                       ) : (
+                         <Upload size={14} />
+                       )}
                      </div>
                      <span style={{ fontSize: '0.75rem', fontWeight: 800, color: articleData.file ? '#0f172a' : '#64748b' }}>
-                       {articleData.file ? articleData.file.name : 'Choose File...'}
+                       {submitting && uploadStatus === 'Analyzing PDF structure...' ? (
+                         <span style={{ color: P.primary, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>Extracting metadata...</span>
+                       ) : (
+                         articleData.file ? articleData.file.name : 'Choose File...'
+                       )}
                      </span>
                   </div>
                 </div>
