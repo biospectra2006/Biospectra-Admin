@@ -46,6 +46,7 @@ const PublishTab = ({
   handleDeleteIssue,
   handleCreateCategory,
   handleUploadArticle,
+  handleExtractPdf,
   articleData,
   setArticleData,
   submitting,
@@ -307,7 +308,7 @@ const PublishTab = ({
       ) : publishStep === 2 ? (
         <motion.div 
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-          style={{ maxWidth: '800px', margin: '0 auto', background: 'white', borderRadius: '1.5rem', border: '1px solid #f1f5f9', boxShadow: '0 20px 50px -10px rgba(0,0,0,0.05)', overflow: 'hidden' }}
+          style={{ maxWidth: '1000px', margin: '0 auto', background: 'white', borderRadius: '1.5rem', border: '1px solid #f1f5f9', boxShadow: '0 20px 50px -10px rgba(0,0,0,0.05)', overflow: 'hidden' }}
         >
           <div style={{ background: '#f8fafc', padding: '1.25rem 2rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
@@ -409,21 +410,23 @@ const PublishTab = ({
               </div>
               <textarea 
                 id="article-abstract"
-                rows={4} placeholder="Provide a concise summary of the research methodology and findings..." 
+                rows={8} placeholder="Provide a concise summary of the research methodology and findings..." 
                 style={{ width: '100%', padding: '1rem', borderRadius: '1rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', lineHeight: 1.6, fontWeight: 500 }}
                 value={articleData.abstract} onChange={e => setArticleData({...articleData, abstract: e.target.value})} required 
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr', gap: '1.5rem' }}>
-              <div className="form-group">
-                <label style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>KEYWORDS</label>
-                <input 
-                  placeholder="Separate with commas..." 
-                  style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.85rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', fontWeight: 600 }}
-                  value={articleData.keywords} onChange={e => setArticleData({...articleData, keywords: e.target.value})} 
-                />
-              </div>
+            <div className="form-group">
+              <label style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>KEYWORDS</label>
+              <textarea 
+                rows={2}
+                placeholder="Separate with commas..." 
+                style={{ width: '100%', padding: '0.85rem 1.25rem', borderRadius: '0.85rem', background: '#fcfcfc', border: '1.5px solid #f1f5f9', fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.4 }}
+                value={articleData.keywords} onChange={e => setArticleData({...articleData, keywords: e.target.value})} 
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
               <div className="form-group">
                 <label style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>PAGES <span style={{ fontWeight: 500, fontSize: '0.65rem', color: '#94a3b8' }}>(auto-fetched from PDF if empty)</span></label>
                 <input 
@@ -435,7 +438,13 @@ const PublishTab = ({
               <div className="form-group">
                 <label style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>PDF FILE</label>
                 <div style={{ position: 'relative', background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.85rem', padding: '0.2rem' }}>
-                  <input type="file" accept=".pdf" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} onChange={e => setArticleData({...articleData, file: e.target.files[0]})} />
+                  <input type="file" accept=".pdf" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} onChange={e => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      setArticleData({...articleData, file});
+                      handleExtractPdf(file);
+                    }
+                  }} />
                   <div style={{ padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                      <div style={{ width: 28, height: 28, background: articleData.file ? P.primary : '#94a3b8', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
                        <Upload size={14} />

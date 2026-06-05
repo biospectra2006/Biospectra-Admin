@@ -364,13 +364,18 @@ const ExploreTab = ({
                 <p style={{ margin: '0.4rem 0 0 0', fontSize: '0.75rem', color: '#94a3b8', fontWeight: 500 }}>Select a volume and issue to view the manuscript repository.</p>
               </div>
             ) : (
-              currentIssueData.categories.map(cat => {
-                const articles = (cat.articles || []).filter(art =>
+              currentIssueData.categories.map((cat, catIndex) => {
+                const isMatch = (art) => 
                   !explorerSearch ||
                   art.title?.toLowerCase().includes(explorerSearch.toLowerCase()) ||
                   art.authors?.toLowerCase().includes(explorerSearch.toLowerCase()) ||
-                  art.doi?.toLowerCase().includes(explorerSearch.toLowerCase())
-                );
+                  art.doi?.toLowerCase().includes(explorerSearch.toLowerCase());
+
+                const startIndex = currentIssueData.categories.slice(0, catIndex).reduce((acc, currCat) => {
+                  return acc + (currCat.articles || []).filter(isMatch).length;
+                }, 0);
+
+                const articles = (cat.articles || []).filter(isMatch);
                 return (
                   <div 
                     key={cat._id} 
@@ -417,7 +422,7 @@ const ExploreTab = ({
                         <div style={{ padding: '1.5rem', textAlign: 'center', background: '#fcfcfc', borderRadius: '1rem', border: '1px dashed #f1f5f9' }}>
                           <p style={{ margin: 0, fontSize: '0.75rem', color: '#cbd5e1', fontWeight: 600, fontStyle: 'italic' }}>No matching manuscripts found in this section.</p>
                         </div>
-                      ) : articles.map(art => (
+                      ) : articles.map((art, index) => (
                         <motion.div
                           key={art._id}
                           draggable="true"
@@ -431,8 +436,14 @@ const ExploreTab = ({
                             cursor: 'grab', boxShadow: '0 2px 8px rgba(0,0,0,0.01)'
                           }}
                         >
-                          <div style={{ padding: '0.5rem', background: `${P.accent}10`, borderRadius: '0.75rem', color: P.accent, flexShrink: 0 }}>
-                            <FileText size={16} />
+                          <div style={{ 
+                            width: '32px', height: '32px', 
+                            background: `${P.accent}15`, borderRadius: '0.75rem', 
+                            color: P.accent, flexShrink: 0, 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontWeight: 900, fontSize: '0.85rem', border: `1px solid ${P.accent}30`
+                          }}>
+                            {startIndex + index + 1}
                           </div>
                           <div style={{ flexGrow: 1, minWidth: 0 }}>
                             <p 

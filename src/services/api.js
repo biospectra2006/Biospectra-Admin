@@ -183,6 +183,13 @@ export const uploadArticle = async (formData) => {
     return response.data;
 };
 
+export const extractPdf = async (formData) => {
+    const response = await api.post('/articles/extract-pdf', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+};
+
 export const deleteArticle = async (id) => {
     const response = await api.delete(`/articles/${id}`);
     return response.data;

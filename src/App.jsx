@@ -18,6 +18,7 @@ import {
   createCategory, 
   deleteCategory,
   uploadArticle, 
+  extractPdf,
   deleteArticle,
   updateArticle,
   getAboutSections,
@@ -139,47 +140,7 @@ function App() {
   // Helper to handle MFA Step-up Challenges
   const withMfa = (action) => {
     return new Promise((resolve, reject) => {
-      const executeAction = async () => {
-        try {
-          const result = await action();
-          resolve(result);
-        } catch (err) {
-          if (err.response && err.response.status === 403 && err.response.data?.status === 'mfa_required') {
-            setMfaVerifiedAt(null);
-            triggerMfaModal(action).then(resolve).catch(reject);
-          } else {
-            reject(err);
-          }
-        }
-      };
-
-      const triggerMfaModal = (act) => {
-        return new Promise((res, rej) => {
-          setMfaModal({
-            isOpen: true,
-            onResolve: async () => {
-              try {
-                setMfaVerifiedAt(Date.now());
-                setMfaModal({ isOpen: false, onResolve: null, onReject: null });
-                const result = await act();
-                res(result);
-              } catch (err) {
-                rej(err);
-              }
-            },
-            onReject: () => {
-              setMfaModal({ isOpen: false, onResolve: null, onReject: null });
-              rej(new Error('MFA_CANCELLED'));
-            }
-          });
-        });
-      };
-
-      if (isElevated) {
-        executeAction();
-      } else {
-        triggerMfaModal(action).then(resolve).catch(reject);
-      }
+      action().then(resolve).catch(reject);
     });
   };
 
@@ -445,6 +406,38 @@ function App() {
     } catch (error) {
       if (error.message === 'MFA_CANCELLED') return showAlert('Cancelled', 'Security challenge was aborted.');
       showAlert('Operation Failed', error.response?.data?.message || 'There was an error processing your article.');
+    } finally {
+      setSubmitting(false);
+      setUploadStatus('');
+    }
+  };
+
+  const handleExtractPdf = async (file) => {
+    if (!file) return;
+    setSubmitting(true);
+    setUploadStatus('Analyzing PDF structure...');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await withMfa(() => extractPdf(formData));
+      if (res.status === 'success' && res.data) {
+        const d = res.data;
+        setArticleData(prev => ({
+          ...prev,
+          title: d.title || prev.title,
+          authors: d.authors || prev.authors,
+          affiliation: d.affiliation || prev.affiliation,
+          abstract: d.abstract || prev.abstract,
+          keywords: d.keywords || prev.keywords,
+          doi: d.doi || prev.doi,
+          pages: d.pages || prev.pages,
+          file: file
+        }));
+        showAlert('Auto-Fill Success', 'Title, authors, abstract, keywords, and pages have been automatically extracted from this PDF!');
+      }
+    } catch (error) {
+      if (error.message === 'MFA_CANCELLED') return;
+      showAlert('Auto-Fill Failed', error.response?.data?.message || 'Could not parse metadata from this PDF. Please enter manually.');
     } finally {
       setSubmitting(false);
       setUploadStatus('');
@@ -806,6 +799,7 @@ function App() {
               handleDeleteIssue={handleDeleteIssue}
               handleCreateCategory={handleCreateCategory}
               handleUploadArticle={handleUploadArticle}
+              handleExtractPdf={handleExtractPdf}
               articleData={articleData}
               setArticleData={setArticleData}
               submitting={submitting}
