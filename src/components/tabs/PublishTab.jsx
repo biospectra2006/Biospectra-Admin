@@ -48,6 +48,7 @@ const PublishTab = ({
   handleCreateCategory,
   handleUploadArticle,
   handleExtractPdf,
+  handleRefetchMetadata,
   articleData,
   setArticleData,
   submitting,
@@ -448,7 +449,20 @@ const PublishTab = ({
                 />
               </div>
               <div className="form-group">
-                <label style={{ marginBottom: '0.5rem', display: 'block', fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>PDF FILE</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569' }}>PDF FILE</label>
+                  {editingArticle && editingArticle.pdfUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleRefetchMetadata(editingArticle._id)}
+                      disabled={submitting}
+                      style={{ padding: '0.2rem 0.6rem', background: '#e0f2fe', border: '1px solid #bae6fd', borderRadius: '0.4rem', fontSize: '0.65rem', fontWeight: 800, color: '#0369a1', cursor: submitting ? 'not-allowed' : 'pointer' }}
+                      title="Refetch metadata from already uploaded PDF"
+                    >
+                      {submitting && uploadStatus.includes('Refetching') ? 'Refetching...' : 'Refetch Metadata'}
+                    </button>
+                  )}
+                </div>
                 <div style={{ position: 'relative', background: '#f8fafc', border: '2px dashed #cbd5e1', borderRadius: '0.85rem', padding: '0.2rem' }}>
                   <input type="file" accept=".pdf" style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }} onChange={e => {
                     const file = e.target.files[0];

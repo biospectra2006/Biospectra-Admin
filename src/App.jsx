@@ -19,6 +19,7 @@ import {
   deleteCategory,
   uploadArticle, 
   extractPdf,
+  refetchPdfMetadata,
   deleteArticle,
   updateArticle,
   getAboutSections,
@@ -444,6 +445,35 @@ function App() {
     }
   };
 
+  const handleRefetchMetadata = async (articleId) => {
+    if (!articleId) return;
+    setSubmitting(true);
+    setUploadStatus('Refetching metadata from existing PDF...');
+    try {
+      const res = await withMfa(() => refetchPdfMetadata(articleId));
+      if (res.status === 'success' && res.data) {
+        const d = res.data;
+        setArticleData(prev => ({
+          ...prev,
+          title: d.title || prev.title,
+          authors: d.authors || prev.authors,
+          affiliation: d.affiliation || prev.affiliation,
+          abstract: d.abstract || prev.abstract,
+          keywords: d.keywords || prev.keywords,
+          doi: d.doi || prev.doi,
+          pages: d.pages || prev.pages
+        }));
+        showAlert('Refetch Success', 'Metadata has been successfully extracted from the existing PDF!');
+      }
+    } catch (error) {
+      if (error.message === 'MFA_CANCELLED') return;
+      showAlert('Refetch Failed', error.response?.data?.message || 'Could not parse metadata from the existing PDF.');
+    } finally {
+      setSubmitting(false);
+      setUploadStatus('');
+    }
+  };
+
   const handleDeleteArticle = async (id) => {
     showConfirm('Delete Article', 'Are you sure you want to permanently delete this article?', async () => {
       try {
@@ -800,6 +830,7 @@ function App() {
               handleCreateCategory={handleCreateCategory}
               handleUploadArticle={handleUploadArticle}
               handleExtractPdf={handleExtractPdf}
+              handleRefetchMetadata={handleRefetchMetadata}
               articleData={articleData}
               setArticleData={setArticleData}
               submitting={submitting}

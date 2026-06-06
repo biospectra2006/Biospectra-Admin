@@ -190,6 +190,11 @@ export const extractPdf = async (formData) => {
     return response.data;
 };
 
+export const refetchPdfMetadata = async (id) => {
+    const response = await api.post(`/articles/${id}/refetch-metadata`);
+    return response.data;
+};
+
 export const deleteArticle = async (id) => {
     const response = await api.delete(`/articles/${id}`);
     return response.data;
